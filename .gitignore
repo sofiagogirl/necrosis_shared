@@ -1,0 +1,6 @@
+data/
+model/
+output/
+__pycache__/
+*.npy
+*.mat
