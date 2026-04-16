@@ -160,9 +160,30 @@ if __name__ == '__main__':
                 x[:,:,0] = image_af[:,:,0]  
                 x[:,:,3] = image_af[:,:,3]  
 
-                image_temp =  (x.copy())
+                # different clip values
+                clip0 = 30000
+                clip3 = 30000
+
+                #clipping the data
+                x[:,:,0] = np.clip(x[:,:, 0], 0, clip0)
+                x[:,:,3] = np.clip(x[:,:,3], 0, clip3)
+
+                # z- score normalization
+                x[:,:,0] = (x[:,:,0] - np.mean(x[:,:,0]))/np.std(x[:,:,0])
+                x[:,:,3] = (x[:,:,3] - np.mean(x[:,:,3]))/np.std(x[:,:,3])
+
+                # min max normalization
+                #x[:,:,0] = (x[:,:,0] - np.min(x[:,:,0]))/(np.max(x[:,:,0]) - np.min(x[:,:,0]))
+                #x[:,:,3] = (x[:,:,3] - np.min(x[:,:,3]))/(np.max(x[:,:,3]) - np.min(x[:,:,3]))
+
+                # [-1, 1] normalization
+                #x[:,:,0] = 2 * ((x[:,:,0] - np.min(x[:,:,0]))/(np.max(x[:,:,0]) - np.min(x[:,:,0]))) - 1
+                #x[:,:,3] = 2 * ((x[:,:,3] - np.min(x[:,:,3]))/(np.max(x[:,:,3]) - np.min(x[:,:,3]))) - 1
+
+            
+                #image_temp =  (x.copy())
                 # for j in range(4):
-                x[:,:] = (image_temp[:,:] - np.mean(image_temp[:,:]))/(np.std(image_temp[:,:]))
+                #x[:,:] = (image_temp[:,:] - np.mean(image_temp[:,:]))/(np.std(image_temp[:,:]))
                 # xx=np.rot90(x,0)
                 # x = x/65535 * 2 - 1
                 xx=x
