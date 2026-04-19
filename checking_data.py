@@ -1,20 +1,17 @@
 import numpy as np
 
-# load each of the three AF images
+# ======================= config =================================
+data_dir = 'C:\\Users\\sofia\\OneDrive\\Desktop\\sofia_necrosis_project\\data\\AF\\'
+samples = ['4B_973', '4B_974', '4B_975']
+channels = [0, 3]
+percentile = 99
 
-af4b_973 = np.load('C:\\Users\\sofia\\OneDrive\\Desktop\\sofia_necrosis_project\\data\\AF\\4B_973_AF.npy')
-af4b_974 = np.load('C:\\Users\\sofia\\OneDrive\\Desktop\\sofia_necrosis_project\\data\\AF\\4B_974_AF.npy')
-af4b_975 = np.load('C:\\Users\\sofia\\OneDrive\\Desktop\\sofia_necrosis_project\\data\\AF\\4B_975_AF.npy')
+# ======================= load data ==============================
+af_images = {s: np.load(data_dir + f'{s}_AF.npy') for s in samples}
 
-# find value that covers 99% of pixels so we can clip
-print("Channel 0: ")
-print(np.percentile(af4b_973[:,:,0], 99))
-print(np.percentile(af4b_974[:,:,0], 99))
-print(np.percentile(af4b_975[:,:,0], 99))
-
-print("Channel 3: ")
-print(np.percentile(af4b_973[:,:,3], 99))
-print(np.percentile(af4b_974[:,:,3], 99))
-print(np.percentile(af4b_975[:,:,3], 99))
-
-
+# ======================= percentile analysis ====================
+for ch in channels:
+    print(f"Channel {ch}:")
+    for s, img in af_images.items():
+        print(f"  {s}: {np.percentile(img[:, :, ch], percentile):.2f}")
+    print()
