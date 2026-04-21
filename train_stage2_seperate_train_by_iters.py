@@ -26,7 +26,7 @@ import ops
 def init_parameters():
     tc, vc = ConfigObj(), ConfigObj()
 
-    tc.model_path = 'C:/Users/76/summer_necrosis_project/Necrotic_Weights'
+    tc.model_path = 'C:/Users/76/summer_necrosis_project/Weights'
     # tc.prev_checkpoint_path = None
     tc.prev_checkpoint_path = None
     tc.save_every_epoch = True
