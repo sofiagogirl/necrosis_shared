@@ -91,6 +91,12 @@ class ImageTransformationBatchLoader(BatchLoader):
         h_target, w_target = label.shape[0], label.shape[1]
         image = image[:h_target, :w_target, :]
 
+        # clipping by channels
+        image[:,:,0] = np.clip(image[:,:,0], 0, 21776)
+        image[:,:,1] = np.clip(image[:,:,1], 0, 14836)
+        image[:,:,2] = np.clip(image[:,:,2], 0, 6234)
+        image[:,:,3] = np.clip(image[:,:,3], 0, 11038)
+
         if self.config.data_inpnorm == 'norm_by_specified_value':
             normalize_vector = [1500, 1500, 1500, 1000]
             normalize_vector = np.reshape(normalize_vector, [1, 1, 4])
