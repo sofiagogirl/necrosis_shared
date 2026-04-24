@@ -91,6 +91,9 @@ class ImageTransformationBatchLoader(BatchLoader):
         h_target, w_target = label.shape[0], label.shape[1]
         image = image[:h_target, :w_target, :]
 
+        # save non-clipped version of image for saturation checking
+        image_non_clipped = np.copy(image)
+
         # clipping by channels
         image[:,:,0] = np.clip(image[:,:,0], 0, 21776)
         image[:,:,1] = np.clip(image[:,:,1], 0, 14836)
@@ -104,10 +107,13 @@ class ImageTransformationBatchLoader(BatchLoader):
         elif self.config.data_inpnorm == 'norm_by_mean_std':
             image = (image - np.mean(image)) / (np.std(image) + 1e-5)
 
-        left_top_crop_edge = 19
+        top_left_crop_edge = 19
         bottom_right_crop_edge = 18
-        image = image[left_top_crop_edge:-bottom_right_crop_edge, left_top_crop_edge:-bottom_right_crop_edge, :]
-        label = label[left_top_crop_edge:-bottom_right_crop_edge, left_top_crop_edge:-bottom_right_crop_edge, :]
+        image = image[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge, :]
+        label = label[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge, :]
+
+        # perform crop on non-clipped image
+        image_non_clipped = image_non_clipped[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge, :]
 
         size = image.shape[0]
 
@@ -122,6 +128,12 @@ class ImageTransformationBatchLoader(BatchLoader):
                 if yy != size - s and xx != size - s:
                     img = image[xx:xx + s, yy:yy + s, :]
                     lab = label[xx:xx + s, yy:yy + s, :]
+
+                    # saturation checking - reject patch if >= 5% of pixels exceed 65,535 (int_max for 16-bit images)
+                    img_non_clipped = image_non_clipped[xx:xx + s, yy:yy + s, :]
+                    saturated_ratio = np.mean(img_non_clipped >= 65535)
+                    if saturated_ratio > 0.05:
+                        continue
 
                     if self.config.filter_blank and np.mean(lab) >= self.config.filter_threshold \
                             and cur_trial_count < self.case_trial_limit:
