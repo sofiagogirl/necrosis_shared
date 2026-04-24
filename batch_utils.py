@@ -104,9 +104,10 @@ class ImageTransformationBatchLoader(BatchLoader):
         elif self.config.data_inpnorm == 'norm_by_mean_std':
             image = (image - np.mean(image)) / (np.std(image) + 1e-5)
 
-        crop_edge = 30
-        image = image[crop_edge:-crop_edge, crop_edge:-crop_edge, :]
-        label = label[crop_edge:-crop_edge, crop_edge:-crop_edge, :]
+        left_top_crop_edge = 19
+        bottom_right_crop_edge = 18
+        image = image[left_top_crop_edge:-bottom_right_crop_edge, left_top_crop_edge:-bottom_right_crop_edge, :]
+        label = label[left_top_crop_edge:-bottom_right_crop_edge, left_top_crop_edge:-bottom_right_crop_edge, :]
 
         size = image.shape[0]
 
