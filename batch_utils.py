@@ -101,7 +101,7 @@ class ImageTransformationBatchLoader(BatchLoader):
         image[:,:,3] = np.clip(image[:,:,3], 0, 11038)
 
         if self.config.data_inpnorm == 'norm_by_specified_value':
-            normalize_vector = [1500, 1500, 1500, 1000]
+            normalize_vector = [21776, 14836, 6234, 11038]
             normalize_vector = np.reshape(normalize_vector, [1, 1, 4])
             image = image / normalize_vector
         elif self.config.data_inpnorm == 'norm_by_mean_std':
