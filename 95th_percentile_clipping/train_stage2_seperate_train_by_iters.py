@@ -2,12 +2,12 @@ import os
 
 import numpy as np
 
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+
 import batch_utils
 import datetime
 import random
-
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 import glob, random, logging
 
@@ -91,7 +91,7 @@ def init_parameters():
     tc.dvf_thresholding_distance = 50
 
     # training params
-    tc.batch_size, vc.batch_size = 4, 4
+    tc.batch_size, vc.batch_size = 10, 10
     tc.n_shuffle_epoch, vc.n_shuffle_epoch = 500, 5000  # for the batchloader
     tc.initial_alternate_steps = 6000  # train G/D for initial_alternate_steps steps before switching to R for the same # of steps
     tc.valid_steps = 100  # perform validation when D_steps % valid_steps == 0 or at the end of a loop of (train G/D, train R)
@@ -165,6 +165,12 @@ def run_validation(vc, cur_iter, iterator_valid_bl, G_test_step, D_test_step, R_
                                valid_y[j, :, :, :].numpy())
                     plt.imsave(tc.model_path + f'/output/iter={cur_iter}_sample={i * vc.batch_size + j}_input0.jpg',
                                -valid_x[j, :, :, 0].numpy(), cmap='gray')
+                    plt.imsave(tc.model_path + f'/output/iter={cur_iter}_sample={i * vc.batch_size + j}_input1.jpg',
+                               -valid_x[j, :, :, 1].numpy(), cmap='gray')
+                    plt.imsave(tc.model_path + f'/output/iter={cur_iter}_sample={i * vc.batch_size + j}_input2.jpg',
+                               -valid_x[j, :, :, 2].numpy(), cmap='gray')
+                    plt.imsave(tc.model_path + f'/output/iter={cur_iter}_sample={i * vc.batch_size + j}_input3.jpg',
+                               -valid_x[j, :, :, 3].numpy(), cmap='gray')
 
         wtr.check_stop()
 
@@ -204,6 +210,14 @@ if __name__ == '__main__':
 
     tf.io.gfile.mkdir(tc.model_path)
     tf.io.gfile.mkdir(tc.model_path + '/output')
+
+    # saving a file with the configuration
+    config_path = tc.model_path + f'/config.txt'
+    config_content = ""
+    for attr, value in tc.items():
+        if not callable(value):
+            config_content = config_content + attr + ": " + str(value) + "\n"
+    tf.io.write_file(config_path, config_content)
 
     # Tensorboard writer
     
@@ -299,6 +313,7 @@ if __name__ == '__main__':
         print("Loaded latest weight and optimizer checkpoints from", tc.prev_checkpoint_path)
 
 
+    @tf.function
     def G_train_step(input_image, target, epoch):
         with tf.GradientTape() as gen_tape:
             G_outputs = model_G(input_image, training=True)
@@ -317,9 +332,10 @@ if __name__ == '__main__':
         G_gradients = gen_tape.gradient(G_total_loss, model_G.trainable_variables,
                                         unconnected_gradients=tf.UnconnectedGradients.ZERO)
         G_optimizer.apply_gradients(zip(G_gradients, model_G.trainable_variables))
-        return G_total_loss, G_dis_loss, G_l1_loss, G_outputs, target_transformed
+        return G_total_loss, G_dis_loss, G_l1_loss, G_outputs
 
 
+    @tf.function
     def G_test_step(input_image, target, epoch):
         G_outputs = model_G(input_image, training=False)
         G_outputs_clipped_splitted = split_tensor(tf.clip_by_value(G_outputs, 0, 1), tc.case_filtering_x_subdivision,
@@ -336,6 +352,7 @@ if __name__ == '__main__':
         return G_total_loss, G_dis_loss, G_l1_loss, G_ssim, G_psnr, G_ncc
 
 
+    @tf.function
     def D_train_step(input_image, target):
         with tf.GradientTape() as disc_tape:
             G_outputs = tf.stop_gradient(model_G(input_image, training=True))
@@ -345,9 +362,10 @@ if __name__ == '__main__':
 
         D_gradients = disc_tape.gradient(D_total_loss, model_D.trainable_variables)
         D_optimizer.apply_gradients(zip(D_gradients, model_D.trainable_variables))
-        return D_total_loss, D_real_loss, D_fake_loss, G_outputs
+        return D_total_loss, D_real_loss, D_fake_loss
 
 
+    @tf.function
     def D_test_step(input_image, target):
         G_outputs = model_G(input_image, training=False)
         D_real_output = model_D(target, training=False)
@@ -356,6 +374,7 @@ if __name__ == '__main__':
         return D_total_loss, D_real_loss, D_fake_loss, G_outputs
 
 
+    @tf.function
     def R_train_step(input_image, target):
         with tf.GradientTape() as reg_tape:
             G_outputs = tf.stop_gradient(model_G(input_image, training=True))
@@ -366,9 +385,10 @@ if __name__ == '__main__':
 
         R_gradients = reg_tape.gradient(R_total_loss, model_R.trainable_variables)
         R_optimizer.apply_gradients(zip(R_gradients, model_R.trainable_variables))
-        return R_total_loss, R_berhu_loss, R_outputs
+        return R_total_loss, R_berhu_loss
 
 
+    @tf.function
     def R_test_step(input_image, target):
         G_outputs = model_G(input_image, training=False)
         R_outputs = model_R([target, G_outputs])
@@ -405,7 +425,7 @@ if __name__ == '__main__':
         # new_R_learning_rate = init_R_learning_rate * (drop ** np.floor(epoch/epoch_to_drop))
         # R_optimizer.lr.assign(new_R_learning_rate)
 
-        train_G_total_loss_list, train_G_l1_loss_list, train_R_total_loss_list = [], [], []
+        train_G_total_loss_list, train_G_l1_loss_list, train_R_total_loss_list, train_D_total_loss_list = [], [], [], []
 
         # loop over batches
         if warmstart_first_epoch_elapsed_iters is None or warmstart_first_epoch_elapsed_iters == 0:
@@ -435,25 +455,20 @@ if __name__ == '__main__':
                     # selecting samples for the current batch
                     train_x, train_y = next(iterator_train_bl)
 
-                    train_G_total_loss, train_G_dis_loss, train_G_l1_loss, train_G_output, train_R_output = G_train_step(
+                    train_G_total_loss, train_G_dis_loss, train_G_l1_loss, train_G_output = G_train_step(
                         train_x, train_y, epoch)
                     train_G_total_loss_list.append(train_G_total_loss)
                     train_G_l1_loss_list.append(train_G_l1_loss)
                     wtr.check_stop()
 
-                if i % 1000 == 0:
-                    plt.imsave(tc.model_path + f'/output/train_epoch={epoch}_sample={i}_outputG.jpg',
-                               np.clip(train_G_output[0, :, :, :].numpy(), 0, 1))
-                    plt.imsave(tc.model_path + f'/output/train_epoch={epoch}_sample={i}_outputR.jpg',
-                               np.clip(train_R_output[0, :, :, :].numpy(), 0, 1))
-                    plt.imsave(tc.model_path + f'/output/train_epoch={epoch}_sample={i}_target.jpg',
-                               train_y[0, :, :, :].numpy())
-                    plt.imsave(tc.model_path + f'/output/train_epoch={epoch}_sample={i}_input0.jpg',
-                               -train_x[0, :, :, 0].numpy(), cmap='gray')
-
                 train_x, train_y = next(iterator_train_bl)
-                train_D_total_loss, train_D_real_loss, train_D_fake_loss, _ = D_train_step(train_x, train_y)
+                train_D_total_loss, train_D_real_loss, train_D_fake_loss = D_train_step(train_x, train_y)
                 iter_D_count += 1
+                train_D_total_loss_list.append(train_D_total_loss)
+
+
+                # getting rid of mid-round validation
+                '''
 
                 #######################################################################################################
                 # mid-round validation
@@ -526,77 +541,104 @@ if __name__ == '__main__':
                     np.save(tc.model_path + f'/optimizer_G_latest.npy', G_optimizer.get_weights())
                     np.save(tc.model_path + f'/optimizer_D_latest.npy', D_optimizer.get_weights())
                     np.save(tc.model_path + f'/optimizer_R_latest.npy', R_optimizer.get_weights())
+                
+                '''
 
         print('training R ...')
         for i in tqdm(range(num_checkpoint_R)):
             train_x, train_y = next(iterator_train_bl)
-            train_R_total_loss, _, train_R_output = R_train_step(train_x, train_y)
+            train_R_total_loss, _ = R_train_step(train_x, train_y)
             wtr.check_stop()
             train_R_total_loss_list.append(train_R_total_loss)
-
-        ###############################################################################################################
-        # round-end validation
-        ###############################################################################################################
-        valid_G_total_loss_mean, valid_G_l1_loss_mean, valid_G_ssim_mean, valid_G_psnr_mean, \
-            vaild_G_ncc_mean, valid_G_ncc_std, valid_D_real_loss_mean, valid_D_fake_loss_mean, \
-            valid_R_total_loss_mean = \
-            run_validation(vc, iter_D_count, iterator_valid_bl, G_test_step, D_test_step, R_test_step, wtr)
 
         train_G_total_loss_mean = np.mean(np.array(train_G_total_loss_list))
         train_G_l1_loss_mean = np.mean(np.array(train_G_l1_loss_list))
         train_R_total_loss_mean = np.mean(np.array(train_R_total_loss_list))
-        train_G_total_loss_list, train_G_l1_loss_list, train_R_total_loss_list = [], [], []
+        train_D_total_loss_mean = np.mean(np.array(train_D_total_loss_list))
 
-        # tensorboard calls 
-        with writer.as_default():
-            tf.summary.scalar("end/valid_G_total_loss_mean", valid_G_total_loss_mean, step=epoch)
-            tf.summary.scalar("end/valid_G_l1_loss_mean", valid_G_l1_loss_mean, step=epoch)
-            tf.summary.scalar("end/valid_G_ssim_mean", valid_G_ssim_mean, step = epoch)
-            tf.summary.scalar("end/valid_G_psnr_mean", valid_G_psnr_mean, step = epoch)
-            tf.summary.scalar("end/vaild_G_ncc_mean", vaild_G_ncc_mean, step = epoch)
-            tf.summary.scalar("end/valid_G_ncc_std", valid_G_ncc_std, step = epoch)
-            tf.summary.scalar("end/valid_D_real_loss_mean", valid_D_real_loss_mean, step = epoch)
-            tf.summary.scalar("end/valid_D_fake_loss_mean", valid_D_fake_loss_mean, step = epoch)
-            tf.summary.scalar("end/valid_R_total_loss_mean", valid_R_total_loss_mean, step = epoch)
-            tf.summary.scalar("end/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
-            tf.summary.scalar("end/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
-            tf.summary.scalar("end/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
-            writer.flush()
+        if epoch % 5 == 0:
+            with writer.as_default():
 
-        # update case filtering metrics
-        # if vaild_G_ncc_mean < 0.5:
-        if tc.case_filtering and tc.case_filtering_recalc_every_eval:
-            tc.case_filtering_cur_mean, tc.case_filtering_cur_stdev = vaild_G_ncc_mean, valid_G_ncc_std
-            print("Updated filtering mean to {} and stdev to {}".format(vaild_G_ncc_mean, valid_G_ncc_std))
+                tf.summary.scalar("every5epochs/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
+                tf.summary.scalar("every5epochs/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
+                tf.summary.scalar("every5epochs/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
+                tf.summary.scalar("every5epochs/train_D_total_loss_mean", train_D_total_loss_mean, step = epoch)
 
-        # output log
-        text = ["round ", "iter_D_count ", "train_G_total_loss_mean ", "train_G_l1_loss_mean ",
-                "valid_G_total_loss_mean ", "valid_G_l1_loss_mean ",
-                "valid_G_ssim_mean", "valid_G_psnr_mean", "valid_G_ncc_mean ", "valid_G_ncc_std ",
-                "valid_D_real_loss_mean ", "valid_D_fake_loss_mean ", "valid_R_total_loss_mean "]
-        value = [epoch, iter_D_count, train_G_total_loss_mean, train_G_l1_loss_mean,
-                 valid_G_total_loss_mean, valid_G_l1_loss_mean,
-                 valid_G_ssim_mean, valid_G_psnr_mean, vaild_G_ncc_mean, valid_G_ncc_std,
-                 valid_D_real_loss_mean, valid_D_fake_loss_mean, valid_R_total_loss_mean]
 
-        msg = ops.verbose_msg(text, value, json_format=True)
-        ops.print_and_save_msg(msg + '\n', tc.model_path + '/train_log.txt')
+                writer.flush()
 
-        # save_model
-        if min_loss - valid_G_l1_loss_mean > tc.min_del or valid_G_psnr_mean > max_psnr \
-                or tc.save_every_epoch:
-            # tol = 0  # refresh early stopping patience
-            model_G.save_weights(tc.model_path + f'/model_G_round={epoch}.h5')
-            model_D.save_weights(tc.model_path + f'/model_D_round={epoch}.h5')
-            model_R.save_weights(tc.model_path + f'/model_R_round={epoch}.h5')
 
-            if min_loss - valid_G_l1_loss_mean > tc.min_del:
-                print('Validation loss is improved from {} to {}'.format(min_loss, valid_G_l1_loss_mean))
-                min_loss = valid_G_l1_loss_mean  # update the loss record
 
-            if valid_G_psnr_mean > max_psnr:
-                print('Validation PSNR is improved from {} to {}'.format(min_loss, valid_G_psnr_mean))
-                max_psnr = valid_G_psnr_mean
+        ###############################################################################################################
+        # round-end validation
+        ###############################################################################################################
+        if epoch % 50 == 0 or epoch == 0:
+
+            valid_G_total_loss_mean, valid_G_l1_loss_mean, valid_G_ssim_mean, valid_G_psnr_mean, \
+                vaild_G_ncc_mean, valid_G_ncc_std, valid_D_real_loss_mean, valid_D_fake_loss_mean, \
+                valid_R_total_loss_mean = \
+                run_validation(vc, iter_D_count, iterator_valid_bl, G_test_step, D_test_step, R_test_step, wtr)
+
+            # tensorboard calls 
+            with writer.as_default():
+                tf.summary.scalar("end/valid_G_total_loss_mean", valid_G_total_loss_mean, step=epoch)
+                tf.summary.scalar("end/valid_G_l1_loss_mean", valid_G_l1_loss_mean, step=epoch)
+                tf.summary.scalar("end/valid_G_ssim_mean", valid_G_ssim_mean, step = epoch)
+                tf.summary.scalar("end/valid_G_psnr_mean", valid_G_psnr_mean, step = epoch)
+                tf.summary.scalar("end/vaild_G_ncc_mean", vaild_G_ncc_mean, step = epoch)
+                tf.summary.scalar("end/valid_G_ncc_std", valid_G_ncc_std, step = epoch)
+                tf.summary.scalar("end/valid_D_real_loss_mean", valid_D_real_loss_mean, step = epoch)
+                tf.summary.scalar("end/valid_D_fake_loss_mean", valid_D_fake_loss_mean, step = epoch)
+                tf.summary.scalar("end/valid_R_total_loss_mean", valid_R_total_loss_mean, step = epoch)
+                tf.summary.scalar("end/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
+                tf.summary.scalar("end/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
+                tf.summary.scalar("end/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
+                writer.flush()
+
+            # update case filtering metrics
+            # if vaild_G_ncc_mean < 0.5:
+            if tc.case_filtering and tc.case_filtering_recalc_every_eval:
+                tc.case_filtering_cur_mean, tc.case_filtering_cur_stdev = vaild_G_ncc_mean, valid_G_ncc_std
+                print("Updated filtering mean to {} and stdev to {}".format(vaild_G_ncc_mean, valid_G_ncc_std))
+
+            # output log
+            text = ["round ", "iter_D_count ", "train_G_total_loss_mean ", "train_G_l1_loss_mean ",
+                    "valid_G_total_loss_mean ", "valid_G_l1_loss_mean ",
+                    "valid_G_ssim_mean", "valid_G_psnr_mean", "valid_G_ncc_mean ", "valid_G_ncc_std ",
+                    "valid_D_real_loss_mean ", "valid_D_fake_loss_mean ", "valid_R_total_loss_mean "]
+            value = [epoch, iter_D_count, train_G_total_loss_mean, train_G_l1_loss_mean,
+                    valid_G_total_loss_mean, valid_G_l1_loss_mean,
+                    valid_G_ssim_mean, valid_G_psnr_mean, vaild_G_ncc_mean, valid_G_ncc_std,
+                    valid_D_real_loss_mean, valid_D_fake_loss_mean, valid_R_total_loss_mean]
+
+            msg = ops.verbose_msg(text, value, json_format=True)
+            ops.print_and_save_msg(msg + '\n', tc.model_path + '/train_log.txt')
+
+            # save_model
+            if min_loss - valid_G_l1_loss_mean > tc.min_del or valid_G_psnr_mean > max_psnr \
+                    or tc.save_every_epoch:
+                # tol = 0  # refresh early stopping patience
+                model_G.save_weights(tc.model_path + f'/model_G_round={epoch}.h5')
+                model_D.save_weights(tc.model_path + f'/model_D_round={epoch}.h5')
+                model_R.save_weights(tc.model_path + f'/model_R_round={epoch}.h5')
+
+                if min_loss - valid_G_l1_loss_mean > tc.min_del:
+                    print('Validation loss is improved from {} to {}'.format(min_loss, valid_G_l1_loss_mean))
+                    min_loss = valid_G_l1_loss_mean  # update the loss record
+
+                if valid_G_psnr_mean > max_psnr:
+                    print('Validation PSNR is improved from {} to {}'.format(min_loss, valid_G_psnr_mean))
+                    max_psnr = valid_G_psnr_mean
+            
+            if epoch == 0: 
+                for j in range(tc.batch_size):
+                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel0.jpg', -train_x[j, :,:, 0], cmap = "gray")
+                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel1.jpg', -train_x[j, :,:, 1], cmap = "gray")
+                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel2.jpg', -train_x[j, :,:, 2], cmap = "gray")
+                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel3.jpg', -train_x[j, :,:, 3], cmap = "gray")
+                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_target.jpg', train_y[j, :, :, :].numpy())
+                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_outputG.jpg', np.clip(train_G_output[j, :, :, :].numpy(), 0, 1))
+                    
 
         model_G.save_weights(tc.model_path + f'/model_G_latest.h5')
         model_D.save_weights(tc.model_path + f'/model_D_latest.h5')
@@ -604,3 +646,5 @@ if __name__ == '__main__':
         np.save(tc.model_path + f'/optimizer_G_latest.npy', G_optimizer.get_weights())
         np.save(tc.model_path + f'/optimizer_D_latest.npy', D_optimizer.get_weights())
         np.save(tc.model_path + f'/optimizer_R_latest.npy', R_optimizer.get_weights())
+
+        train_G_total_loss_list, train_G_l1_loss_list, train_R_total_loss_list, train_D_total_loss_list = [], [], [], []

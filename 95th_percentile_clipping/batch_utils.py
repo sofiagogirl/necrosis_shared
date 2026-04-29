@@ -84,8 +84,8 @@ class ImageTransformationBatchLoader(BatchLoader):
 
         input_path = self.config.convert_inp_path_from_target(path)
         
-        label = np.load(path).astype(np.float32) / 255.0 # BF - ensure gradients do not explode due to activation functions by dividing by 255
-        image = np.load(input_path).astype(np.float32) # AF
+        label = np.load(path, mmap_mode='r').astype(np.float32) / 255.0 # BF - ensure gradients do not explode due to activation functions by dividing by 255
+        image = np.load(input_path, mmap_mode='r').astype(np.float32) # AF
 
         # perform top left crop to get AF image down to BF dimensions
         h_target, w_target = label.shape[0], label.shape[1]
@@ -118,6 +118,7 @@ class ImageTransformationBatchLoader(BatchLoader):
         size = image.shape[0]
 
         cur_trial_count = 0
+        sat_trial_count = 0
         x = 0
         while True:
             y = 0
@@ -133,9 +134,11 @@ class ImageTransformationBatchLoader(BatchLoader):
                     img_non_clipped = image_non_clipped[xx:xx + s, yy:yy + s, :]
                     saturated_ratio = np.mean(img_non_clipped >= 65535)
                     if saturated_ratio > 0.05:
-                        continue
-
-                    if self.config.filter_blank and np.mean(lab) >= self.config.filter_threshold \
+                        sat_trial_count += 1
+                        if sat_trial_count < self.case_trial_limit:
+                            continue
+                        # limit reached: skip position, advance y
+                    elif self.config.filter_blank and np.mean(lab) >= self.config.filter_threshold \
                             and cur_trial_count < self.case_trial_limit:
                         # print("debug: fitered out patch with mean:", np.mean(lab))
                         # self.cur_filter_count += 1
@@ -149,6 +152,7 @@ class ImageTransformationBatchLoader(BatchLoader):
                         #     print("Blank filtering helps +1")
                         yield (img.astype(np.float32), lab.astype(np.float32))
 
+                sat_trial_count = 0
                 if yy == size - s:
                     break
                 y += stride
