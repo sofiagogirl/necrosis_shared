@@ -84,12 +84,22 @@ class ImageTransformationBatchLoader(BatchLoader):
 
         input_path = self.config.convert_inp_path_from_target(path)
         
+        ######################
+        # print("Processing file: ", path)
+        # print("Corresponding input file: ", input_path)
+        
         label = np.load(path).astype(np.float32) / 255.0 # BF - ensure gradients do not explode due to activation functions by dividing by 255
         image = np.load(input_path).astype(np.float32) # AF
 
-        # perform top left crop to get AF image down to BF dimensions
+        # downsample AF image to match BF label dimensions
         h_target, w_target = label.shape[0], label.shape[1]
-        image = image[:h_target, :w_target, :]
+        zoom_h = h_target / image.shape[0]
+        zoom_w = w_target / image.shape[1]
+        image = ndimage.zoom(image, (zoom_h, zoom_w, 1), order=1)
+
+        ######################
+        # print("Image shape after cropping to target dimensions: ", image.shape)
+        # print("Label shape after cropping to target dimensions: ", label.shape)
 
         # save non-clipped version of image for saturation checking
         image_non_clipped = np.copy(image)
@@ -99,6 +109,13 @@ class ImageTransformationBatchLoader(BatchLoader):
         image[:,:,1] = np.clip(image[:,:,1], 0, 14836)
         image[:,:,2] = np.clip(image[:,:,2], 0, 6234)
         image[:,:,3] = np.clip(image[:,:,3], 0, 11038)
+        
+        ######################  
+        # fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        # axs[0].imshow(image[:,:,0], cmap='gray')
+        # axs[0].set_title('Clipped Image Channel 0')
+        # axs[1].imshow(label)
+        # axs[1].set_title('Label')
 
         if self.config.data_inpnorm == 'norm_by_specified_value':
             normalize_vector = [21776, 14836, 6234, 11038]

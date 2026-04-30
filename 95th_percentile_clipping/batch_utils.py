@@ -39,7 +39,7 @@ class BatchLoader(object):
 
         # self.dataset = self.dataset.map(lambda x, y: self._preprocessing(x, y), num_parallel_calls=config.n_threads)
 
-        self.dataset = self.dataset.batch(self.config.batch_size).prefetch(100)
+        self.dataset = self.dataset.batch(self.config.batch_size).prefetch(tf.data.AUTOTUNE)
         self.iter: tf.compat.v1.data.Iterator = tf.compat.v1.data.Iterator.from_structure(
             tf.compat.v1.data.get_output_types(self.dataset),
             tf.compat.v1.data.get_output_shapes(self.dataset))
@@ -95,10 +95,10 @@ class ImageTransformationBatchLoader(BatchLoader):
         image_non_clipped = np.copy(image)
 
         # clipping by channels
-        image[:,:,0] = np.clip(image[:,:,0], 0, 16252)
-        image[:,:,1] = np.clip(image[:,:,1], 0, 12156)
-        image[:,:,2] = np.clip(image[:,:,2], 0, 4265)
-        image[:,:,3] = np.clip(image[:,:,3], 0, 8749)
+        image[:,:,0] = np.clip(image[:,:,0], 0, 21776)
+        image[:,:,1] = np.clip(image[:,:,1], 0, 14836)
+        image[:,:,2] = np.clip(image[:,:,2], 0, 6234)
+        image[:,:,3] = np.clip(image[:,:,3], 0, 11038)
 
         if self.config.data_inpnorm == 'norm_by_specified_value':
             normalize_vector = [16252.0, 12156.0, 4265.0, 8749.0]
@@ -203,7 +203,7 @@ class ImageTransformationBatchLoader_Testing(BatchLoader):
             label = np.transpose(np.load(path).astype(np.float32), axes=[1, 2, 0]) / 255.0
 
         if self.config.data_inpnorm == 'norm_by_specified_value':
-            normalize_vector = [1500, 1500, 1500, 1000]
+            normalize_vector = [21776, 14836, 6234, 11038]
             normalize_vector = np.reshape(normalize_vector, [1, 1, 4])
             image = image / normalize_vector
         elif self.config.data_inpnorm == 'norm_by_mean_std':

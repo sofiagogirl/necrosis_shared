@@ -27,7 +27,7 @@ import ops
 def init_parameters():
     tc, vc = ConfigObj(), ConfigObj()
 
-    tc.model_path = 'C:/Users/76/summer_necrosis_project/Weights'
+    tc.model_path = 'C:/Users/76/sofia_necrosis_project/Weights'
     # tc.prev_checkpoint_path = None
     tc.prev_checkpoint_path = None
     tc.save_every_epoch = True
@@ -50,6 +50,7 @@ def init_parameters():
     # subject to change based on which samples we want for training/testing
     tc.train_samples = ['1', '2', '3'] 
     tc.test_samples = ['4']
+
 
     #tc.train_samples = ['1', '2'] 
     #vc.val_samples = ['3'] # leave out '4' for testing

@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import batch_utils
 import datetime
@@ -95,8 +95,8 @@ def init_parameters():
     tc.n_shuffle_epoch, vc.n_shuffle_epoch = 500, 5000  # for the batchloader
     tc.initial_alternate_steps = 6000  # train G/D for initial_alternate_steps steps before switching to R for the same # of steps
     tc.valid_steps = 100  # perform validation when D_steps % valid_steps == 0 or at the end of a loop of (train G/D, train R)
-    tc.n_threads, vc.n_threads = 2, 2
-    tc.q_limit, vc.q_limit = 100, 300
+    tc.n_threads, vc.n_threads = 6, 6
+    tc.q_limit, vc.q_limit = 100, 100
     tc.N_epoch = 150  # number of loops
 
     tc.tol = 0  # current early stopping patience
