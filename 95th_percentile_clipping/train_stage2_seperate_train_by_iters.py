@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 import batch_utils
 import datetime
@@ -27,7 +27,7 @@ import ops
 def init_parameters():
     tc, vc = ConfigObj(), ConfigObj()
 
-    tc.model_path = 'C:/Users/76/summer_necrosis_project/Weights'
+    tc.model_path = 'C:/Users/76/summer_necrosis_project/Weights/'
     # tc.prev_checkpoint_path = None
     tc.prev_checkpoint_path = None
     tc.save_every_epoch = True
@@ -91,12 +91,12 @@ def init_parameters():
     tc.dvf_thresholding_distance = 50
 
     # training params
-    tc.batch_size, vc.batch_size = 10, 10
+    tc.batch_size, vc.batch_size = 12, 12
     tc.n_shuffle_epoch, vc.n_shuffle_epoch = 500, 5000  # for the batchloader
     tc.initial_alternate_steps = 6000  # train G/D for initial_alternate_steps steps before switching to R for the same # of steps
     tc.valid_steps = 100  # perform validation when D_steps % valid_steps == 0 or at the end of a loop of (train G/D, train R)
-    tc.n_threads, vc.n_threads = 6, 6
-    tc.q_limit, vc.q_limit = 100, 100
+    tc.n_threads, vc.n_threads = 24, 12 # we have a 24-core machine
+    tc.q_limit, vc.q_limit = 200, 200
     tc.N_epoch = 150  # number of loops
 
     tc.tol = 0  # current early stopping patience
@@ -141,7 +141,12 @@ def run_validation(vc, cur_iter, iterator_valid_bl, G_test_step, D_test_step, R_
             print("Running Validation: {}/{}".format(i+1, vc.q_limit), end='\r')
             if i == vc.q_limit - 1:
                 print()
-        valid_x, valid_y = next(iterator_valid_bl)
+
+        try:
+            valid_x, valid_y = next(iterator_valid_bl)
+        except StopIteration: # can crash if the dataset runs out before q_limit is reached
+            break
+
         valid_G_total_loss, valid_G_dis_loss, valid_G_l1_loss, valid_G_ssim, valid_G_psnr, valid_G_ncc = G_test_step(
             valid_x, valid_y, 3)
         valid_D_total_loss, valid_D_real_loss, valid_D_fake_loss, valid_G_output = D_test_step(valid_x, valid_y)
@@ -151,11 +156,11 @@ def run_validation(vc, cur_iter, iterator_valid_bl, G_test_step, D_test_step, R_
             for j in range(vc.batch_size):
                 if tc.label_channels == 1:
                     plt.imsave(tc.model_path + f'/output/iter={cur_iter}_sample={i * vc.batch_size + j}_outputG.jpg',
-                               valid_G_output[j, :, :, 0], cmap='gray')
+                               np.clip(valid_G_output[j, :, :, 0].numpy(), 0, 1), cmap='gray')
                     plt.imsave(tc.model_path + f'/output/iter={cur_iter}_sample={i * vc.batch_size + j}_outputR.jpg',
-                               valid_R_output[0][j, :, :, 0], cmap='gray')
+                               np.clip(valid_R_output[0][j, :, :, 0].numpy(), 0, 1), cmap='gray')
                     plt.imsave(tc.model_path + f'/output/iter={cur_iter}_sample={i * vc.batch_size + j}_target.jpg',
-                               valid_y[j, :, :, 0], cmap='gray')
+                               valid_y[j, :, :, 0].numpy(), cmap='gray')
                 else:
                     plt.imsave(tc.model_path + f'/output/iter={cur_iter}_sample={i * vc.batch_size + j}_outputG.jpg',
                                np.clip(valid_G_output[j, :, :, :].numpy(), 0, 1))
@@ -321,9 +326,9 @@ if __name__ == '__main__':
 
             if epoch > 0:
                 if tc.dvf_clipping or tc.dvf_thresholding:
-                    target_transformed, _, _ = model_R([target, G_outputs])
+                    target_transformed, _, _ = model_R([target, G_outputs], training=False)
                 else:
-                    target_transformed, _ = model_R([target, G_outputs])
+                    target_transformed, _ = model_R([target, G_outputs], training=False)
             else:
                 target_transformed = target
 
@@ -332,7 +337,7 @@ if __name__ == '__main__':
         G_gradients = gen_tape.gradient(G_total_loss, model_G.trainable_variables,
                                         unconnected_gradients=tf.UnconnectedGradients.ZERO)
         G_optimizer.apply_gradients(zip(G_gradients, model_G.trainable_variables))
-        return G_total_loss, G_dis_loss, G_l1_loss, G_outputs
+        return G_total_loss, G_dis_loss, G_l1_loss, G_outputs, target_transformed
 
 
     @tf.function
@@ -355,14 +360,14 @@ if __name__ == '__main__':
     @tf.function
     def D_train_step(input_image, target):
         with tf.GradientTape() as disc_tape:
-            G_outputs = tf.stop_gradient(model_G(input_image, training=True))
+            G_outputs = tf.stop_gradient(model_G(input_image, training=False))
             D_real_output = model_D(target, training=True)
             D_fake_output = model_D(G_outputs, training=True)
             D_total_loss, D_real_loss, D_fake_loss = loss_D(D_real_output, D_fake_output)
 
         D_gradients = disc_tape.gradient(D_total_loss, model_D.trainable_variables)
         D_optimizer.apply_gradients(zip(D_gradients, model_D.trainable_variables))
-        return D_total_loss, D_real_loss, D_fake_loss
+        return D_total_loss, D_real_loss, D_fake_loss, G_outputs
 
 
     @tf.function
@@ -385,13 +390,12 @@ if __name__ == '__main__':
 
         R_gradients = reg_tape.gradient(R_total_loss, model_R.trainable_variables)
         R_optimizer.apply_gradients(zip(R_gradients, model_R.trainable_variables))
-        return R_total_loss, R_berhu_loss
-
+        return R_total_loss, R_berhu_loss, R_outputs
 
     @tf.function
     def R_test_step(input_image, target):
         G_outputs = model_G(input_image, training=False)
-        R_outputs = model_R([target, G_outputs])
+        R_outputs = model_R([target, G_outputs], training=False)
         if tc.dvf_clipping or tc.dvf_thresholding:
             R_outputs = R_outputs[:-1]
         R_total_loss, R_berhu_loss = loss_R_no_gt(R_outputs, G_outputs, tc)
@@ -455,14 +459,14 @@ if __name__ == '__main__':
                     # selecting samples for the current batch
                     train_x, train_y = next(iterator_train_bl)
 
-                    train_G_total_loss, train_G_dis_loss, train_G_l1_loss, train_G_output = G_train_step(
+                    train_G_total_loss, train_G_dis_loss, train_G_l1_loss, train_G_output, train_R_output = G_train_step(
                         train_x, train_y, epoch)
                     train_G_total_loss_list.append(train_G_total_loss)
                     train_G_l1_loss_list.append(train_G_l1_loss)
-                    wtr.check_stop()
+                wtr.check_stop()
 
                 train_x, train_y = next(iterator_train_bl)
-                train_D_total_loss, train_D_real_loss, train_D_fake_loss = D_train_step(train_x, train_y)
+                train_D_total_loss, train_D_real_loss, train_D_fake_loss, _ = D_train_step(train_x, train_y)
                 iter_D_count += 1
                 train_D_total_loss_list.append(train_D_total_loss)
 
@@ -547,7 +551,7 @@ if __name__ == '__main__':
         print('training R ...')
         for i in tqdm(range(num_checkpoint_R)):
             train_x, train_y = next(iterator_train_bl)
-            train_R_total_loss, _ = R_train_step(train_x, train_y)
+            train_R_total_loss, _, train_R_output = R_train_step(train_x, train_y)
             wtr.check_stop()
             train_R_total_loss_list.append(train_R_total_loss)
 

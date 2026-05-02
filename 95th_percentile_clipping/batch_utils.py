@@ -87,18 +87,20 @@ class ImageTransformationBatchLoader(BatchLoader):
         label = np.load(path, mmap_mode='r').astype(np.float32) / 255.0 # BF - ensure gradients do not explode due to activation functions by dividing by 255
         image = np.load(input_path, mmap_mode='r').astype(np.float32) # AF
 
-        # perform top left crop to get AF image down to BF dimensions
+         # downsample AF image to match BF label dimensions
         h_target, w_target = label.shape[0], label.shape[1]
-        image = image[:h_target, :w_target, :]
+        zoom_h = h_target / image.shape[0]
+        zoom_w = w_target / image.shape[1]
+        image = ndimage.zoom(image, (zoom_h, zoom_w, 1), order=1)
 
-        # save non-clipped version of image for saturation checking
-        image_non_clipped = np.copy(image)
+        # save non-clipped mask for saturation checking
+        sat_mask = np.any(image >= 65535, axis=-1)
 
         # clipping by channels
-        image[:,:,0] = np.clip(image[:,:,0], 0, 21776)
-        image[:,:,1] = np.clip(image[:,:,1], 0, 14836)
-        image[:,:,2] = np.clip(image[:,:,2], 0, 6234)
-        image[:,:,3] = np.clip(image[:,:,3], 0, 11038)
+        image[:,:,0] = np.clip(image[:,:,0], 0, 21776, out=image[:,:,0])
+        image[:,:,1] = np.clip(image[:,:,1], 0, 14836, out=image[:,:,1])
+        image[:,:,2] = np.clip(image[:,:,2], 0, 6234, out=image[:,:,2])
+        image[:,:,3] = np.clip(image[:,:,3], 0, 11038, out=image[:,:,3])
 
         if self.config.data_inpnorm == 'norm_by_specified_value':
             normalize_vector = [16252.0, 12156.0, 4265.0, 8749.0]
@@ -111,9 +113,6 @@ class ImageTransformationBatchLoader(BatchLoader):
         bottom_right_crop_edge = 18
         image = image[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge, :]
         label = label[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge, :]
-
-        # perform crop on non-clipped image
-        image_non_clipped = image_non_clipped[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge, :]
 
         size = image.shape[0]
 
@@ -131,8 +130,7 @@ class ImageTransformationBatchLoader(BatchLoader):
                     lab = label[xx:xx + s, yy:yy + s, :]
 
                     # saturation checking - reject patch if >= 5% of pixels exceed 65,535 (int_max for 16-bit images)
-                    img_non_clipped = image_non_clipped[xx:xx + s, yy:yy + s, :]
-                    saturated_ratio = np.mean(img_non_clipped >= 65535)
+                    saturated_ratio = np.mean(sat_mask[xx:xx+s, yy:yy+s])
                     if saturated_ratio > 0.05:
                         sat_trial_count += 1
                         if sat_trial_count < self.case_trial_limit:
@@ -153,6 +151,7 @@ class ImageTransformationBatchLoader(BatchLoader):
                         yield (img.astype(np.float32), lab.astype(np.float32))
 
                 sat_trial_count = 0
+                cur_trial_count = 0
                 if yy == size - s:
                     break
                 y += stride
@@ -203,7 +202,7 @@ class ImageTransformationBatchLoader_Testing(BatchLoader):
             label = np.transpose(np.load(path).astype(np.float32), axes=[1, 2, 0]) / 255.0
 
         if self.config.data_inpnorm == 'norm_by_specified_value':
-            normalize_vector = [21776, 14836, 6234, 11038]
+            normalize_vector = [16252.0, 12156.0, 4265.0, 8749.0]
             normalize_vector = np.reshape(normalize_vector, [1, 1, 4])
             image = image / normalize_vector
         elif self.config.data_inpnorm == 'norm_by_mean_std':
