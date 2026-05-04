@@ -113,6 +113,7 @@ class ImageTransformationBatchLoader(BatchLoader):
         bottom_right_crop_edge = 18
         image = image[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge, :]
         label = label[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge, :]
+        sat_mask = sat_mask[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge]
 
         size = image.shape[0]
 

@@ -91,7 +91,7 @@ def init_parameters():
     tc.dvf_thresholding_distance = 50
 
     # training params
-    tc.batch_size, vc.batch_size = 12, 12
+    tc.batch_size, vc.batch_size = 6, 6
     tc.n_shuffle_epoch, vc.n_shuffle_epoch = 500, 5000  # for the batchloader
     tc.initial_alternate_steps = 6000  # train G/D for initial_alternate_steps steps before switching to R for the same # of steps
     tc.valid_steps = 100  # perform validation when D_steps % valid_steps == 0 or at the end of a loop of (train G/D, train R)
@@ -131,7 +131,7 @@ def init_parameters():
     return tc, vc
 
 
-def run_validation(vc, cur_iter, iterator_valid_bl, G_test_step, D_test_step, R_test_step, wtr, use_tqdm=True):
+def run_validation(vc, cur_iter, cur_epoch,iterator_valid_bl, G_test_step, D_test_step, R_test_step, wtr, use_tqdm=True):
     valid_G_total_loss_list, valid_G_l1_loss_list, valid_G_ssim_list, valid_G_psnr_list, valid_G_ncc_list, \
     valid_D_real_loss_list, valid_D_fake_loss_list, valid_R_total_loss_list = [], [], [], [], [], [], [], []
 
@@ -148,7 +148,7 @@ def run_validation(vc, cur_iter, iterator_valid_bl, G_test_step, D_test_step, R_
             break
 
         valid_G_total_loss, valid_G_dis_loss, valid_G_l1_loss, valid_G_ssim, valid_G_psnr, valid_G_ncc = G_test_step(
-            valid_x, valid_y, 3)
+            valid_x, valid_y, cur_epoch)
         valid_D_total_loss, valid_D_real_loss, valid_D_fake_loss, valid_G_output = D_test_step(valid_x, valid_y)
         valid_R_total_loss, _, valid_R_output = R_test_step(valid_x, valid_y)
 
@@ -252,8 +252,8 @@ if __name__ == '__main__':
     #train_images = [f for f in all_images if os.path.basename(f)[0]  in tc.train_samples]
     #valid_images = [f for f in all_images if os.path.basename(f)[0] in tc.train_samples]
     
-    random.shuffle(train_images)
-    random.shuffle(valid_images)
+    #random.shuffle(train_images)
+    #random.shuffle(valid_images)
 
     ops.copy_code(model_path=tc.model_path)
 
@@ -382,7 +382,7 @@ if __name__ == '__main__':
     @tf.function
     def R_train_step(input_image, target):
         with tf.GradientTape() as reg_tape:
-            G_outputs = tf.stop_gradient(model_G(input_image, training=True))
+            G_outputs = tf.stop_gradient(model_G(input_image, training=False))
             R_outputs = model_R([target, G_outputs], training=True)
             if tc.dvf_clipping or tc.dvf_thresholding:
                 R_outputs = R_outputs[:-1]
@@ -581,7 +581,7 @@ if __name__ == '__main__':
             valid_G_total_loss_mean, valid_G_l1_loss_mean, valid_G_ssim_mean, valid_G_psnr_mean, \
                 vaild_G_ncc_mean, valid_G_ncc_std, valid_D_real_loss_mean, valid_D_fake_loss_mean, \
                 valid_R_total_loss_mean = \
-                run_validation(vc, iter_D_count, iterator_valid_bl, G_test_step, D_test_step, R_test_step, wtr)
+                run_validation(vc, iter_D_count, epoch, iterator_valid_bl, G_test_step, D_test_step, R_test_step, wtr)
 
             # tensorboard calls 
             with writer.as_default():
@@ -631,15 +631,18 @@ if __name__ == '__main__':
                     min_loss = valid_G_l1_loss_mean  # update the loss record
 
                 if valid_G_psnr_mean > max_psnr:
-                    print('Validation PSNR is improved from {} to {}'.format(min_loss, valid_G_psnr_mean))
+                    print('Validation PSNR is improved from {} to {}'.format(max_psnr, valid_G_psnr_mean))
                     max_psnr = valid_G_psnr_mean
             
             if epoch == 0: 
+                # code was lacking this line but it addresses the discrepancy between output vs. target images
+                train_G_output = model_G(train_x, training=False) 
+
                 for j in range(tc.batch_size):
-                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel0.jpg', -train_x[j, :,:, 0], cmap = "gray")
-                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel1.jpg', -train_x[j, :,:, 1], cmap = "gray")
-                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel2.jpg', -train_x[j, :,:, 2], cmap = "gray")
-                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel3.jpg', -train_x[j, :,:, 3], cmap = "gray")
+                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel0.jpg', -train_x[j, :,:, 0].numpy(), cmap = "gray")
+                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel1.jpg', -train_x[j, :,:, 1].numpy(), cmap = "gray")
+                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel2.jpg', -train_x[j, :,:, 2].numpy(), cmap = "gray")
+                    plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_inputG_channel3.jpg', -train_x[j, :,:, 3].numpy(), cmap = "gray")
                     plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_target.jpg', train_y[j, :, :, :].numpy())
                     plt.imsave(tc.model_path + f'/output/epoch={epoch}_sample={j}_outputG.jpg', np.clip(train_G_output[j, :, :, :].numpy(), 0, 1))
                     

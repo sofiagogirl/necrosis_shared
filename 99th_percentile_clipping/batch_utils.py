@@ -87,14 +87,16 @@ class ImageTransformationBatchLoader(BatchLoader):
         label = np.load(path, mmap_mode='r').astype(np.float32) / 255.0 # BF - ensure gradients do not explode due to activation functions by dividing by 255
         image = np.load(input_path, mmap_mode='r').astype(np.float32) # AF
 
+         # save non-clipped mask for saturation checking
+        sat_mask = np.any(image >= 65535, axis=-1)
+
          # downsample AF image to match BF label dimensions
         h_target, w_target = label.shape[0], label.shape[1]
         zoom_h = h_target / image.shape[0]
         zoom_w = w_target / image.shape[1]
         image = ndimage.zoom(image, (zoom_h, zoom_w, 1), order=1)
+        sat_mask = ndimage.zoom(sat_mask.astype(np.float32), (zoom_h, zoom_w), order=0).astype(bool)
 
-        # save non-clipped mask for saturation checking
-        sat_mask = np.any(image >= 65535, axis=-1)
 
         # clipping by channels
         image[:,:,0] = np.clip(image[:,:,0], 0, 21776, out=image[:,:,0])
@@ -113,11 +115,12 @@ class ImageTransformationBatchLoader(BatchLoader):
         bottom_right_crop_edge = 18
         image = image[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge, :]
         label = label[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge, :]
+        sat_mask = sat_mask[top_left_crop_edge:-bottom_right_crop_edge, top_left_crop_edge:-bottom_right_crop_edge]
 
         size = image.shape[0]
 
         cur_trial_count = 0
-        sat_trial_count = 0
+        good_patch = True
         x = 0
         while True:
             y = 0
@@ -128,33 +131,37 @@ class ImageTransformationBatchLoader(BatchLoader):
                 if yy != size - s and xx != size - s:
                     img = image[xx:xx + s, yy:yy + s, :]
                     lab = label[xx:xx + s, yy:yy + s, :]
+                    good_patch = True
 
                     # saturation checking - reject patch if >= 5% of pixels exceed 65,535 (int_max for 16-bit images)
                     saturated_ratio = np.mean(sat_mask[xx:xx+s, yy:yy+s])
                     if saturated_ratio > 0.05:
-                        sat_trial_count += 1
-                        if sat_trial_count < self.case_trial_limit:
+                        cur_trial_count += 1
+                        good_patch = False
+                        if cur_trial_count < self.case_trial_limit:
                             continue
                         # limit reached: skip position, advance y
-                    elif self.config.filter_blank and np.mean(lab) >= self.config.filter_threshold \
+                    if self.config.filter_blank and np.mean(lab) >= self.config.filter_threshold \
                             and cur_trial_count < self.case_trial_limit:
                         # print("debug: fitered out patch with mean:", np.mean(lab))
                         # self.cur_filter_count += 1
                         # plt.imsave('filtered_label_patch_{}.jpg'.format(self.cur_filter_count), lab)
                         cur_trial_count += 1
+                        good_patch = False
                         # if cur_trial_count == self.case_trial_limit:
                         #     print("Blank filtering max trial reached")
                         continue
-                    else:
+                    if good_patch:
                         # if 0 < cur_trial_count < self.case_trial_limit:
                         #     print("Blank filtering helps +1")
                         yield (img.astype(np.float32), lab.astype(np.float32))
+                        cur_trial_count = 0
 
-                sat_trial_count = 0
-                cur_trial_count = 0
                 if yy == size - s:
                     break
                 y += stride
+                good_patch = True
+                cur_trial_count = 0
             if xx == size - s:
                 break
             x += stride
@@ -202,7 +209,7 @@ class ImageTransformationBatchLoader_Testing(BatchLoader):
             label = np.transpose(np.load(path).astype(np.float32), axes=[1, 2, 0]) / 255.0
 
         if self.config.data_inpnorm == 'norm_by_specified_value':
-            normalize_vector = [21776.0, 14836.0, 6234.0, 11038.0]
+            normalize_vector = [16252.0, 12156.0, 4265.0, 8749.0]
             normalize_vector = np.reshape(normalize_vector, [1, 1, 4])
             image = image / normalize_vector
         elif self.config.data_inpnorm == 'norm_by_mean_std':

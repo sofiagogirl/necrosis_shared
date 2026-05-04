@@ -159,7 +159,7 @@ def loss_G(D_fake_output, G_output, target, train_config, cur_epoch=None):
                 train_config.epoch_filtering_ratio.append(
                     1 - tf.reduce_sum(cur_mask) / cur_mask.get_shape().as_list()[0])
 
-                cur_index = tf.squeeze(tf.where(cur_mask))
+                cur_index = tf.reshape(tf.where(cur_mask), [-1])
                 G_output = tf.gather(G_output, cur_index, axis=0)
                 target = tf.gather(target, cur_index, axis=0)
                 D_fake_output = tf.gather(D_fake_output, cur_index, axis=0)
@@ -174,24 +174,24 @@ def loss_G(D_fake_output, G_output, target, train_config, cur_epoch=None):
                                                     train_config.case_filtering_y_subdivision)
                 cur_ncc = tf.stop_gradient(NCC(win=20, eps=1e-3).ncc(target_clipped_split, G_output_clipped_split))
                 cur_mask = tf.cast(tf.math.greater(cur_ncc, min_ncc_threshold), tf.int32)
-                train_config.epoch_filtering_ratio.append(
-                    1 - tf.reduce_sum(cur_mask) / cur_mask.get_shape().as_list()[0])
 
                 n_patches = (train_config.case_filtering_x_subdivision
                              * train_config.case_filtering_y_subdivision)
+                bsz = G_output_clipped.get_shape().as_list()[0]
 
-                cur_index = tf.squeeze(tf.where(cur_mask))
+                filtering_ratio = 1.0 - tf.cast(tf.reduce_sum(cur_mask), tf.float32) / float(bsz * n_patches)
+                train_config.epoch_filtering_ratio.append(filtering_ratio)
+
+                cur_index = tf.reshape(tf.where(cur_mask), [-1])
                 cur_index_image = cur_index // n_patches
-                cur_index_image = tf.unique(cur_index_image)[0]  
+                cur_index_image = tf.unique(cur_index_image)[0]
                 G_output = tf.gather(G_output, cur_index_image, axis=0)
                 target = tf.gather(target, cur_index_image, axis=0)
 
                 # remove similar ratio of images from D to keep G-D step ratio consistent
-                bsz = G_output_clipped.get_shape().as_list()[0]
                 cur_mask_by_case = tf.reduce_sum(tf.reshape(cur_mask, [bsz, n_patches]), axis=-1)
-                cur_D_index = tf.math.top_k(
-                    cur_mask_by_case,
-                    k=int(bsz * (1 - train_config.epoch_filtering_ratio[-1]) + 0.5)).indices
+                k = tf.maximum(tf.cast(tf.round(float(bsz) * (1.0 - filtering_ratio)), tf.int32), 1)
+                cur_D_index = tf.math.top_k(cur_mask_by_case, k=k).indices
                 D_fake_output = tf.gather(D_fake_output, cur_D_index, axis=0)
         else:
             print("Unsupported case filtering metric")
