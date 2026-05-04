@@ -87,7 +87,7 @@ class ImageTransformationBatchLoader(BatchLoader):
         label = np.load(path, mmap_mode='r').astype(np.float32) / 255.0 # BF - ensure gradients do not explode due to activation functions by dividing by 255
         image = np.load(input_path, mmap_mode='r').astype(np.float32) # AF
 
-         # save non-clipped mask for saturation checking
+        # save pre-zoom and pre-clip mask for saturation checking
         sat_mask = np.any(image >= 65535, axis=-1)
 
          # downsample AF image to match BF label dimensions
@@ -96,7 +96,6 @@ class ImageTransformationBatchLoader(BatchLoader):
         zoom_w = w_target / image.shape[1]
         image = ndimage.zoom(image, (zoom_h, zoom_w, 1), order=1)
         sat_mask = ndimage.zoom(sat_mask.astype(np.float32), (zoom_h, zoom_w), order=0).astype(bool)
-
 
         # clipping by channels
         image[:,:,0] = np.clip(image[:,:,0], 0, 21776, out=image[:,:,0])
