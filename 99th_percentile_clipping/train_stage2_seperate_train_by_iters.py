@@ -43,8 +43,8 @@ def init_parameters():
     assert not (tc.prev_checkpoint_path
                 and (tc.G_warmstart_checkpoint or tc.D_warmstart_checkpoint or tc.R_warmstart_checkpoint))
 
-    tc.image_path_1 = 'D:/Project_Nectrotic/Data/NonNecrotic/BF/*.npy'
-    vc.image_path_1 = 'D:/Project_Nectrotic/Data/NonNecrotic/BF/*.npy' #'G:/Pneumonia_Dataset/Second_reg/Testing/AAW*/target/*.mat'
+    tc.image_path_1 = 'D:/Project_Necrotic/Data/NonNecrotic/BF/*.npy'
+    vc.image_path_1 = 'D:/Project_Necrotic/Data/NonNecrotic/BF/*.npy' #'G:/Pneumonia_Dataset/Second_reg/Testing/AAW*/target/*.mat'
     tc.image_path_2 = '' #'I:/Pneumonia_Dataset/Second_reg/Training/AAW*/target/*.mat'
     vc.image_path_2 = '' #'I:/Pneumonia_Dataset/Second_reg/Testing/AAW*/target/*.mat'
 
