@@ -119,50 +119,33 @@ class ImageTransformationBatchLoader(BatchLoader):
         size = image.shape[0]
 
         cur_trial_count = 0
-        good_patch = True
         x = 0
-        while True:
+        while x <= size - s:
             y = 0
-            while True:
-                rand_choice_stride = random.randint(0, 15)
-                xx = min(x + rand_choice_stride * s // 16, size - s)
-                yy = min(y + rand_choice_stride * s // 16, size - s)
-                if yy != size - s and xx != size - s:
-                    img = image[xx:xx + s, yy:yy + s, :]
-                    lab = label[xx:xx + s, yy:yy + s, :]
-                    good_patch = True
+            while y <= size - s:
+                cur_trial_count = 0
+                
+                while cur_trial_count < self.case_trial_limit:
+                    
+                    rand_choice_stride = random.randint(0, 15)
+                    xx = min(x + rand_choice_stride * s // 16, size - s)
+                    yy = min(y + rand_choice_stride * s // 16, size - s)
 
-                    # saturation checking - reject patch if >= 5% of pixels exceed 65,535 (int_max for 16-bit images)
                     saturated_ratio = np.mean(sat_mask[xx:xx+s, yy:yy+s])
                     if saturated_ratio > 0.05:
                         cur_trial_count += 1
-                        good_patch = False
-                        if cur_trial_count < self.case_trial_limit:
-                            continue
-                        # limit reached: skip position, advance y
-                    if self.config.filter_blank and np.mean(lab) >= self.config.filter_threshold \
-                            and cur_trial_count < self.case_trial_limit:
-                        # print("debug: fitered out patch with mean:", np.mean(lab))
-                        # self.cur_filter_count += 1
-                        # plt.imsave('filtered_label_patch_{}.jpg'.format(self.cur_filter_count), lab)
-                        cur_trial_count += 1
-                        good_patch = False
-                        # if cur_trial_count == self.case_trial_limit:
-                        #     print("Blank filtering max trial reached")
-                        continue
-                    if good_patch:
-                        # if 0 < cur_trial_count < self.case_trial_limit:
-                        #     print("Blank filtering helps +1")
-                        yield (img.astype(np.float32), lab.astype(np.float32))
-                        cur_trial_count = 0
+                        continue # failed, retry with a different jitter
 
-                if yy == size - s:
-                    break
-                y += stride
-                good_patch = True
-                cur_trial_count = 0
-            if xx == size - s:
-                break
+                    lab_patch = label[xx:xx+s, yy:yy+s, :]
+                    if self.config.filter_blank and np.mean(lab_patch) >= self.config.filter_threshold:
+                        cur_trial_count += 1
+                        continue # failed, retry with a different jitter
+
+                    img_patch = image[xx:xx+s, yy:yy+s, :]
+                    yield (img_patch.astype(np.float32), lab_patch.astype(np.float32))
+                    break 
+                
+                y += stride     
             x += stride
 
     def augment(self, img, lab):
