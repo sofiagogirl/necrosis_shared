@@ -42,8 +42,8 @@ def init_parameters():
     assert not (tc.prev_checkpoint_path
                 and (tc.G_warmstart_checkpoint or tc.D_warmstart_checkpoint or tc.R_warmstart_checkpoint))
 
-    tc.image_path_1 = 'G:/Project_Nectrotic/Data/ProcessingData/RegistrationRound2_crops/NPY/NonNecrotic/BF/*.npy'
-    vc.image_path_1 = 'G:/Project_Nectrotic/Data/ProcessingData/RegistrationRound2_crops/NPY/NonNecrotic/BF/*.npy' #'G:/Pneumonia_Dataset/Second_reg/Testing/AAW*/target/*.mat'
+    tc.image_path_1 = 'D:/Project_Necrotic/Data/NonNecrotic/BF/*.npy'
+    vc.image_path_1 = 'D:/Project_Necrotic/Data/NonNecrotic/BF/*.npy' #'G:/Pneumonia_Dataset/Second_reg/Testing/AAW*/target/*.mat'
     tc.image_path_2 = '' #'I:/Pneumonia_Dataset/Second_reg/Training/AAW*/target/*.mat'
     vc.image_path_2 = '' #'I:/Pneumonia_Dataset/Second_reg/Testing/AAW*/target/*.mat'
 
@@ -560,16 +560,15 @@ if __name__ == '__main__':
         train_R_total_loss_mean = np.mean(np.array(train_R_total_loss_list))
         train_D_total_loss_mean = np.mean(np.array(train_D_total_loss_list))
 
-        if epoch % 5 == 0:
-            with writer.as_default():
+        with writer.as_default():
 
-                tf.summary.scalar("every5epochs/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
-                tf.summary.scalar("every5epochs/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
-                tf.summary.scalar("every5epochs/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
-                tf.summary.scalar("every5epochs/train_D_total_loss_mean", train_D_total_loss_mean, step = epoch)
+            tf.summary.scalar("everyepoch_mixed/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
+            tf.summary.scalar("everyepoch_mixed/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
+            tf.summary.scalar("everyepoch_mixed/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
+            tf.summary.scalar("everyepoch_mixed/train_D_total_loss_mean", train_D_total_loss_mean, step = epoch)
 
 
-                writer.flush()
+            writer.flush()
 
 
 
@@ -585,18 +584,18 @@ if __name__ == '__main__':
 
             # tensorboard calls 
             with writer.as_default():
-                tf.summary.scalar("end/valid_G_total_loss_mean", valid_G_total_loss_mean, step=epoch)
-                tf.summary.scalar("end/valid_G_l1_loss_mean", valid_G_l1_loss_mean, step=epoch)
-                tf.summary.scalar("end/valid_G_ssim_mean", valid_G_ssim_mean, step = epoch)
-                tf.summary.scalar("end/valid_G_psnr_mean", valid_G_psnr_mean, step = epoch)
-                tf.summary.scalar("end/vaild_G_ncc_mean", vaild_G_ncc_mean, step = epoch)
-                tf.summary.scalar("end/valid_G_ncc_std", valid_G_ncc_std, step = epoch)
-                tf.summary.scalar("end/valid_D_real_loss_mean", valid_D_real_loss_mean, step = epoch)
-                tf.summary.scalar("end/valid_D_fake_loss_mean", valid_D_fake_loss_mean, step = epoch)
-                tf.summary.scalar("end/valid_R_total_loss_mean", valid_R_total_loss_mean, step = epoch)
-                tf.summary.scalar("end/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
-                tf.summary.scalar("end/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
-                tf.summary.scalar("end/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/valid_G_total_loss_mean", valid_G_total_loss_mean, step=epoch)
+                tf.summary.scalar("end_mixed/valid_G_l1_loss_mean", valid_G_l1_loss_mean, step=epoch)
+                tf.summary.scalar("end_mixed/valid_G_ssim_mean", valid_G_ssim_mean, step = epoch)
+                tf.summary.scalar("end_mixed/valid_G_psnr_mean", valid_G_psnr_mean, step = epoch)
+                tf.summary.scalar("end_mixed/vaild_G_ncc_mean", vaild_G_ncc_mean, step = epoch)
+                tf.summary.scalar("end_mixed/valid_G_ncc_std", valid_G_ncc_std, step = epoch)
+                tf.summary.scalar("end_mixed/valid_D_real_loss_mean", valid_D_real_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/valid_D_fake_loss_mean", valid_D_fake_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/valid_R_total_loss_mean", valid_R_total_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
                 writer.flush()
 
             # update case filtering metrics

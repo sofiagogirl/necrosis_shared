@@ -23,6 +23,7 @@ from losses import *
 from watcher import Watcher
 import ops
 
+
 def init_parameters():
     tc, vc = ConfigObj(), ConfigObj()
 
@@ -317,7 +318,7 @@ if __name__ == '__main__':
         print("Loaded latest weight and optimizer checkpoints from", tc.prev_checkpoint_path)
 
 
-    @tf.function(jit_compile=True)
+    @tf.function
     def G_train_step(input_image, target, epoch):
         with tf.GradientTape() as gen_tape:
             G_outputs = model_G(input_image, training=True)
@@ -339,7 +340,7 @@ if __name__ == '__main__':
         return G_total_loss, G_dis_loss, G_l1_loss, G_outputs, target_transformed
 
 
-    @tf.function(jit_compile=True)
+    @tf.function
     def G_test_step(input_image, target, epoch):
         G_outputs = model_G(input_image, training=False)
         G_outputs_clipped_splitted = split_tensor(tf.clip_by_value(G_outputs, 0, 1), tc.case_filtering_x_subdivision,
@@ -356,7 +357,7 @@ if __name__ == '__main__':
         return G_total_loss, G_dis_loss, G_l1_loss, G_ssim, G_psnr, G_ncc
 
 
-    @tf.function(jit_compile=True)
+    @tf.function
     def D_train_step(input_image, target):
         with tf.GradientTape() as disc_tape:
             G_outputs = tf.stop_gradient(model_G(input_image, training=False))
@@ -369,7 +370,7 @@ if __name__ == '__main__':
         return D_total_loss, D_real_loss, D_fake_loss, G_outputs
 
 
-    @tf.function(jit_compile=True)
+    @tf.function
     def D_test_step(input_image, target):
         G_outputs = model_G(input_image, training=False)
         D_real_output = model_D(target, training=False)
@@ -378,7 +379,7 @@ if __name__ == '__main__':
         return D_total_loss, D_real_loss, D_fake_loss, G_outputs
 
 
-    @tf.function(jit_compile=True)
+    @tf.function
     def R_train_step(input_image, target):
         with tf.GradientTape() as reg_tape:
             G_outputs = tf.stop_gradient(model_G(input_image, training=False))
@@ -391,7 +392,7 @@ if __name__ == '__main__':
         R_optimizer.apply_gradients(zip(R_gradients, model_R.trainable_variables))
         return R_total_loss, R_berhu_loss, R_outputs
 
-    @tf.function(jit_compile=True)
+    @tf.function
     def R_test_step(input_image, target):
         G_outputs = model_G(input_image, training=False)
         R_outputs = model_R([target, G_outputs], training=False)
@@ -561,10 +562,10 @@ if __name__ == '__main__':
 
         with writer.as_default():
 
-            tf.summary.scalar("everyepoch_xla/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
-            tf.summary.scalar("everyepoch_xla/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
-            tf.summary.scalar("everyepoch_xla/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
-            tf.summary.scalar("everyepoch_xla/train_D_total_loss_mean", train_D_total_loss_mean, step = epoch)
+            tf.summary.scalar("everyepoch_mixed/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
+            tf.summary.scalar("everyepoch_mixed/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
+            tf.summary.scalar("everyepoch_mixed/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
+            tf.summary.scalar("everyepoch_mixed/train_D_total_loss_mean", train_D_total_loss_mean, step = epoch)
 
 
             writer.flush()
@@ -583,18 +584,18 @@ if __name__ == '__main__':
 
             # tensorboard calls 
             with writer.as_default():
-                tf.summary.scalar("end_xla/valid_G_total_loss_mean", valid_G_total_loss_mean, step=epoch)
-                tf.summary.scalar("end_xla/valid_G_l1_loss_mean", valid_G_l1_loss_mean, step=epoch)
-                tf.summary.scalar("end_xla/valid_G_ssim_mean", valid_G_ssim_mean, step = epoch)
-                tf.summary.scalar("end_xla/valid_G_psnr_mean", valid_G_psnr_mean, step = epoch)
-                tf.summary.scalar("end_xla/vaild_G_ncc_mean", vaild_G_ncc_mean, step = epoch)
-                tf.summary.scalar("end_xla/valid_G_ncc_std", valid_G_ncc_std, step = epoch)
-                tf.summary.scalar("end_xla/valid_D_real_loss_mean", valid_D_real_loss_mean, step = epoch)
-                tf.summary.scalar("end_xla/valid_D_fake_loss_mean", valid_D_fake_loss_mean, step = epoch)
-                tf.summary.scalar("end_xla/valid_R_total_loss_mean", valid_R_total_loss_mean, step = epoch)
-                tf.summary.scalar("end_xla/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
-                tf.summary.scalar("end_xla/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
-                tf.summary.scalar("end_xla/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/valid_G_total_loss_mean", valid_G_total_loss_mean, step=epoch)
+                tf.summary.scalar("end_mixed/valid_G_l1_loss_mean", valid_G_l1_loss_mean, step=epoch)
+                tf.summary.scalar("end_mixed/valid_G_ssim_mean", valid_G_ssim_mean, step = epoch)
+                tf.summary.scalar("end_mixed/valid_G_psnr_mean", valid_G_psnr_mean, step = epoch)
+                tf.summary.scalar("end_mixed/vaild_G_ncc_mean", vaild_G_ncc_mean, step = epoch)
+                tf.summary.scalar("end_mixed/valid_G_ncc_std", valid_G_ncc_std, step = epoch)
+                tf.summary.scalar("end_mixed/valid_D_real_loss_mean", valid_D_real_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/valid_D_fake_loss_mean", valid_D_fake_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/valid_R_total_loss_mean", valid_R_total_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/train_G_total_loss_mean", train_G_total_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/train_G_l1_loss_mean", train_G_l1_loss_mean, step = epoch)
+                tf.summary.scalar("end_mixed/train_R_total_loss_mean", train_R_total_loss_mean, step = epoch)
                 writer.flush()
 
             # update case filtering metrics
