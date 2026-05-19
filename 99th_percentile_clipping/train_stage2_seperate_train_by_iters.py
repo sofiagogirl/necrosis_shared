@@ -27,7 +27,7 @@ import ops
 def init_parameters():
     tc, vc = ConfigObj(), ConfigObj()
 
-    tc.model_path = 'C:/Users/76/sofia_necrosis_project/Weights/'
+    tc.model_path = 'C:/Users/76/sofia_necrosis_project/Weights_aligned/'
     # tc.prev_checkpoint_path = None
     tc.prev_checkpoint_path = None
     tc.save_every_epoch = True
@@ -42,8 +42,8 @@ def init_parameters():
     assert not (tc.prev_checkpoint_path
                 and (tc.G_warmstart_checkpoint or tc.D_warmstart_checkpoint or tc.R_warmstart_checkpoint))
 
-    tc.image_path_1 = 'D:/Project_Necrotic/Data/NonNecrotic/BF/*.npy'
-    vc.image_path_1 = 'D:/Project_Necrotic/Data/NonNecrotic/BF/*.npy' #'G:/Pneumonia_Dataset/Second_reg/Testing/AAW*/target/*.mat'
+    tc.image_path_1 = 'D:/Project_Necrotic/Data/NonNecroticAlign/BF/*.npy'
+    vc.image_path_1 = 'D:/Project_Necrotic/Data/NonNecroticAlign/BF/*.npy' #'G:/Pneumonia_Dataset/Second_reg/Testing/AAW*/target/*.mat'
     tc.image_path_2 = '' #'I:/Pneumonia_Dataset/Second_reg/Training/AAW*/target/*.mat'
     vc.image_path_2 = '' #'I:/Pneumonia_Dataset/Second_reg/Testing/AAW*/target/*.mat'
 
